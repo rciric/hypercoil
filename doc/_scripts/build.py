@@ -29,7 +29,10 @@ from griffe import (
 )
 from plum import dispatch
 from quartodoc.__main__ import chdir
-from quartodoc.renderers.md_renderer import _has_attr_section
+from quartodoc.ast import DocstringSectionSeeAlso
+from quartodoc.renderers.md_renderer import (
+    _has_attr_section,
+)
 
 
 SRCREPO = 'https://github.com/hypercoil/{lib}/tree/main/src/{lib}'
@@ -132,6 +135,8 @@ class HRenderer(quartodoc.MdRenderer):
             short_parts.append(part)
         short = " ".join(short_parts)
         short = quartodoc.renderers.base.convert_rst_link_to_md(short)
+        if short[-1] == r'\\':
+            short = short[:-1]
         return short
 
     @staticmethod
@@ -299,6 +304,36 @@ class HRenderer(quartodoc.MdRenderer):
     def render(self, el: Parameters) -> "list":
         pars = super().render(el)
         return list(HRenderer.param_annot(pars, el))
+
+    @dispatch
+    def render(self, el: DocstringSectionSeeAlso):
+        entities = []
+        cur_entity = []
+        for e in el.value.split('\n'):
+            if not e:
+                continue
+            elif e[:4] != '    ':  # New entity
+                if cur_entity:
+                    entities.append(cur_entity)
+                cur_entity = [e]
+            else:
+                cur_entity.append(e)
+        if cur_entity:
+            entities.append(cur_entity)
+        contents = (
+            '\n'.join(
+                [
+                    ' | '.join(
+                        ('', e[0], ' '.join(f.strip() for f in e[1:]), '')
+                    )
+                    for e in entities
+                ]
+            )
+        )
+        table = (
+            f'|     | Description |\n|-----|-------------|\n{contents}\n'
+        ) + ': {.striped .hover}'
+        return quartodoc.renderers.base.convert_rst_link_to_md(table)
 
 
 def main():
